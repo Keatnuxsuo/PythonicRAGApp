@@ -333,10 +333,14 @@ Try uploading a text file and asking some questions!
 Upload a PDF file of the recent DeepSeek-R1 paper and ask the following questions:
 
 1. What is RL and how does it help reasoning?
+   > Reinforcement Learning (RL) is a type of machine learning where an agent learns to make decisions by taking actions in an environment to maximize cumulative rewards. In the context of improving reasoning capabilities in language models (LLMs), RL helps by allowing the models to explore and refine their reasoning processes through a trial-and-error approach. This leads to the development of complex reasoning behaviors, enabling the models to perform better on reasoning tasks without relying on supervised data for initial training (as demonstrated in DeepSeek-R1-Zero). By using RL, the models can evolve their reasoning skills and self-improve through interactions with their environment, which enhances their performance in reasoning benchmarks.
 2. What is the difference between DeepSeek-R1 and DeepSeek-R1-Zero?
+   > The primary difference between DeepSeek-R1 and DeepSeek-R1-Zero is their development and capabilities in solving reasoning tasks. DeepSeek-R1-Zero is designed to improve upon the foundational capabilities of DeepSeek-R1 by utilizing reinforcement learning, which enhances its ability to handle increasingly complex reasoning tasks through extended test-time computation. DeepSeek-R1-Zero naturally acquires the ability to engage in deeper thought processes and exhibits more sophisticated behaviors, such as reflection and exploration of alternative problem-solving approaches.Additionally, DeepSeek-R1 is noted to have limitations in areas such as function calling, multi-turn interactions, complex role-playing, and JSON output, while DeepSeek-R1-Zero aims to leverage the reinforcement learning process to address these deficits and improve performance.
 3. What is this paper about?
+   > It returns I don't know
 
 Does this application pass your vibe check? Are there any immediate pitfalls you're noticing?
+> The app passes most of the vibe check as it ensure contextual relevance and preventing misinterpretation. However, the pitfalls I noticed are Overly strict Matching Criteria. For example, the question has to be closely related to the context in PDF. If there's no match because of the wording such as "What is this paper about?" which isn't closely related to the content in the vector database. It returns I don't know.
 
 ## 🚧 CHALLENGE MODE 🚧
 
