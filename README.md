@@ -167,6 +167,7 @@ Simply put, this downloads the file as a temp file, we load it in with `TextFile
 #### ❓ QUESTION #1:
 
 Why do we want to support streaming? What about streaming is important, or useful?
+> Without streaming, long responses from LLM will be noticably delayed. Streaming responses print out or processing the begining of the model's output whilt it continues generating the full responses.
 
 ### On Chat Start:
 
@@ -209,6 +210,8 @@ Now, we'll save that into our user session!
 #### ❓ QUESTION #2: 
 
 Why are we using User Session here? What about Python makes us need to use this? Why not just store everything in a global variable?
+- User session is designed to persist data in memory through the life cycle of a chat session (on chat start -> on message -> on stop -> on chat end -> on chat resume). Each user session is unique to a user and a given chat session.
+- Using session has a benefits of State Management (Isolation of chat for each user), Concurrency (Python's global vars aren't thread-safe by default), Isolation (chat history, user data), Scalability (as app grows UserSession is more matainable and scalable than Global vars)
 
 ### On Message
 
