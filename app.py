@@ -1,54 +1,38 @@
 import os
-from typing import List
+from typing import List, Dict, Any
 from chainlit.types import AskFileResponse
 from aimakerspace.text_utils import CharacterTextSplitter, TextFileLoader, PDFLoader
-from aimakerspace.openai_utils.prompts import (
-    UserRolePrompt,
-    SystemRolePrompt,
-    AssistantRolePrompt,
-)
-from aimakerspace.openai_utils.embedding import EmbeddingModel
-from aimakerspace.vectordatabase import VectorDatabase
-from aimakerspace.openai_utils.chatmodel import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_qdrant import Qdrant
+from qdrant_client import QdrantClient
 import chainlit as cl
 
-system_template = """\
-Use the following context to answer a users question. If you cannot find the answer in the context, say you don't know the answer."""
-system_role_prompt = SystemRolePrompt(system_template)
+# Initialize Qdrant client
+qdrant_client = QdrantClient(":memory:")  # For development, use in-memory storage
+# For production, you might want to use:
+# qdrant_client = QdrantClient(url="http://localhost:6333")
 
-user_prompt_template = """\
+# Initialize embeddings
+embeddings = OpenAIEmbeddings()
+
+# Initialize LLM
+llm = ChatOpenAI(temperature=0)
+
+# Create the prompt template
+template = """Use the following context to answer the question. If you cannot find the answer in the context, say you don't know the answer.
+
 Context:
 {context}
 
 Question:
 {question}
 """
-user_role_prompt = UserRolePrompt(user_prompt_template)
-
-class RetrievalAugmentedQAPipeline:
-    def __init__(self, llm: ChatOpenAI(), vector_db_retriever: VectorDatabase) -> None:
-        self.llm = llm
-        self.vector_db_retriever = vector_db_retriever
-
-    async def arun_pipeline(self, user_query: str):
-        context_list = self.vector_db_retriever.search_by_text(user_query, k=4)
-
-        context_prompt = ""
-        for context in context_list:
-            context_prompt += context[0] + "\n"
-
-        formatted_system_prompt = system_role_prompt.create_message()
-
-        formatted_user_prompt = user_role_prompt.create_message(question=user_query, context=context_prompt)
-
-        async def generate_response():
-            async for chunk in self.llm.astream([formatted_system_prompt, formatted_user_prompt]):
-                yield chunk
-
-        return {"response": generate_response(), "context": context_list}
+prompt = ChatPromptTemplate.from_template(template)
 
 text_splitter = CharacterTextSplitter()
-
 
 def process_file(file: AskFileResponse):
     import tempfile
@@ -78,9 +62,8 @@ def process_file(file: AskFileResponse):
             # Clean up the temporary file
             try:
                 os.unlink(temp_file.name)
-            except Exception as e:
+            except OSError as e:
                 print(f"Error cleaning up temporary file: {e}")
-
 
 @cl.on_chat_start
 async def on_chat_start():
@@ -102,38 +85,50 @@ async def on_chat_start():
     )
     await msg.send()
 
-    # load the file
+    # Process the file
     texts = process_file(file)
-
     print(f"Processing {len(texts)} text chunks")
 
-    # Create a dict vector store
-    vector_db = VectorDatabase()
-    vector_db = await vector_db.abuild_from_list(texts)
-    
-    chat_openai = ChatOpenAI()
-
-    # Create a chain
-    retrieval_augmented_qa_pipeline = RetrievalAugmentedQAPipeline(
-        vector_db_retriever=vector_db,
-        llm=chat_openai
+    # Create Qdrant vector store
+    vector_store = Qdrant(
+        client=qdrant_client,
+        collection_name="documents",
+        embeddings=embeddings,
     )
+    
+    # Add documents to vector store
+    vector_store.add_texts(texts)
+    
+    # Create the retriever
+    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+    
+    # Create the RAG chain using LCEL
+    rag_chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
+    
+    # Store the chain in the user session
+    cl.user_session.set("chain", rag_chain)
     
     # Let the user know that the system is ready
     msg.content = f"Processing `{file.name}` done. You can now ask questions!"
     await msg.update()
 
-    cl.user_session.set("chain", retrieval_augmented_qa_pipeline)
-
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
 
 @cl.on_message
 async def main(message):
     chain = cl.user_session.get("chain")
-
+    
     msg = cl.Message(content="")
-    result = await chain.arun_pipeline(message.content)
-
-    async for stream_resp in result["response"]:
-        await msg.stream_token(stream_resp)
-
     await msg.send()
+    
+    # Stream the response
+    async for chunk in chain.astream(message.content):
+        await msg.stream_token(chunk)
+    
+    await msg.update()
