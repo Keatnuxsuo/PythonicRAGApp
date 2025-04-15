@@ -14,5 +14,5 @@ dependencies = [
     "langchain_core==0.1.45",
     "langchain_openai==0.0.8",
     "langchain_qdrant==0.1.0",
-    "qdrant_client==1.7.4",
+    "qdrant_client==1.9.0",
 ]
