@@ -8,12 +8,11 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_qdrant import Qdrant
 from qdrant_client import QdrantClient
+from qdrant_client.http import models
 import chainlit as cl
 
-# Initialize Qdrant client
-qdrant_client = QdrantClient(":memory:")  # For development, use in-memory storage
-# For production, you might want to use:
-# qdrant_client = QdrantClient(url="http://localhost:6333")
+# Initialize Qdrant client with persistent storage
+qdrant_client = QdrantClient(path="./qdrant_data")  # Store data in a local directory
 
 # Initialize embeddings
 embeddings = OpenAIEmbeddings()
@@ -89,10 +88,24 @@ async def on_chat_start():
     texts = process_file(file)
     print(f"Processing {len(texts)} text chunks")
 
+    # Ensure the collection exists
+    collection_name = "documents"
+    try:
+        qdrant_client.get_collection(collection_name)
+    except Exception:
+        # Create collection if it doesn't exist
+        qdrant_client.create_collection(
+            collection_name=collection_name,
+            vectors_config=models.VectorParams(
+                size=1536,  # OpenAI embeddings dimension
+                distance=models.Distance.COSINE
+            )
+        )
+
     # Create Qdrant vector store
     vector_store = Qdrant(
         client=qdrant_client,
-        collection_name="documents",
+        collection_name=collection_name,
         embeddings=embeddings,
     )
     
